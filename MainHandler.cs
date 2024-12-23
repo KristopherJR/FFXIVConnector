@@ -13,12 +13,18 @@ namespace FFXIVConnector
     {
         private FFXIVNetworkMonitor? _monitor;
         private bool _disposed;
+        private readonly Dictionary<ushort, Func<IHandler>> _handlerFactories;
 
         public MainHandler()
         {
             _monitor = new FFXIVNetworkMonitor();
             _monitor.MessageReceivedEventHandler += MessageReceived;
             _monitor.Start();
+
+            _handlerFactories = new Dictionary<ushort, Func<IHandler>>
+            {
+                { (ushort)OpCodes.MarketBoardItemListing, () => new MarketBoardItemListingsHandler() },
+            };
         }
 
         public void MessageReceived(TCPConnection connection, long epoch, byte[] message)
@@ -26,18 +32,12 @@ namespace FFXIVConnector
             if (message.Length < Marshal.SizeOf<Server_MessageHeader>())
                 return; // Message is too short to contain a header, invalid
 
-            IHandler handler = null;
-
             var header = Memory.ToStruct<Server_MessageHeader>(message);
 
-            switch (header.MessageType)
+            if (_handlerFactories.TryGetValue(header.MessageType, out var handlerFactory))
             {
-                case (ushort)OpCodes.MarketBoardItemListing:
-                    handler = new MarketBoardItemListingsHandler();
-                    break;
+                handlerFactory().Handle(message.Skip(0x20).ToArray()); // Skip the header
             }
-
-            handler?.Handle(message.Skip(0x20).ToArray()); // skip the header
         }
 
         protected virtual void Dispose(bool disposing)
@@ -52,6 +52,8 @@ namespace FFXIVConnector
                         _monitor.MessageReceivedEventHandler = null;
                         _monitor = null;
                     }
+
+                    _handlerFactories.Clear();
                 }
 
                 _disposed = true;
@@ -60,7 +62,6 @@ namespace FFXIVConnector
 
         public void Dispose()
         {
-            // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
             Dispose(disposing: true);
             GC.SuppressFinalize(this);
         }
