@@ -1,6 +1,7 @@
 ﻿using FFXIVConnector.Network.Interfaces;
 using FFXIVConnector.Network.Models;
 using System.Text;
+using static FFXIVConnector.Network.Models.MarketBoardItemListings;
 
 namespace FFXIVConnector.Network.Deserialisers
 {
@@ -8,7 +9,12 @@ namespace FFXIVConnector.Network.Deserialisers
     {
         public MarketBoardItemListings Deserialise(byte[] message)
         {
-            var output = new MarketBoardItemListings();
+            var output = new MarketBoardItemListings
+            {
+                RawData = message,
+                Epoch = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                OpCode = new OpCodeValue((ServerZoneIpcType)BitConverter.ToUInt16(message, 18)),
+            };
 
             using var stream = new MemoryStream(message);
             using var reader = new BinaryReader(stream);
